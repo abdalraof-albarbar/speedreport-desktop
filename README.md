@@ -5,7 +5,14 @@ Weekly Internet Test · Communications Department · Akakus Oil Operations, El S
 **Download:** [SpeedReport.exe](https://github.com/abdalraof-albarbar/speedreport-desktop/releases/latest/download/SpeedReport.exe) (latest release). No installer and no account needed.
 
 1. Download `SpeedReport.exe` anywhere (Desktop, a USB stick, ...).
-2. Double-click it. Windows may show "Windows protected your PC" because the file is not code-signed: choose **More info → Run anyway**.
+2. Double-click it. The file is **digitally signed** by *Akakus Oil Operations - Communications Department*.
+   - On PCs that trust the company certificate it opens straight away with the publisher name shown.
+     Trust it once per PC by running `Trust-Akakus-Publisher.ps1` (from the release, as Administrator), or push `AkakusSpeedReport.cer`
+     to all PCs with Group Policy (Trusted Publishers + Trusted Root).
+   - On other PCs Windows may still show "Windows protected your PC" (SmartScreen only skips the warning for certificates from a
+     public authority): choose **More info → Run anyway**.
+   - To remove the warning everywhere, buy a code-signing certificate (or use Azure Trusted Signing) and replace the repo secrets
+     `SIGN_PFX_BASE64` (the .pfx, base64) and `SIGN_PFX_PASSWORD`; the pipeline signs with whatever is there.
 3. The app opens in your browser at `http://127.0.0.1:8765`. It runs only on your PC and needs no sign-in.
 4. It closes itself about a minute after you close the browser tab. Double-clicking again re-opens it.
 

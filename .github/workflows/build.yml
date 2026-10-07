@@ -68,6 +68,13 @@ jobs:
         shell: pwsh
         run: ./build.ps1
 
+      - name: Sign the exe (certificate comes from the repo secrets)
+        shell: pwsh
+        env:
+          SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+          SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
+        run: ./scripts/sign.ps1
+
       - name: Self-test the exe (app starts, OCR engine loads)
         shell: pwsh
         run: |
@@ -92,7 +99,7 @@ jobs:
           $tag = "v$(Get-Date -Format 'yyyy.MM.dd')-$($sha.Substring(0,7))"
           $notes = "Portable Windows app (no installer): download SpeedReport.exe, double-click, it opens in your browser.`n`nsource: $sha"
           gh release delete $tag --yes --cleanup-tag --repo ${{ github.repository }} 2>$null
-          gh release create $tag dist\SpeedReport.exe dist\SpeedReport.exe.sha256 --repo ${{ github.repository }} --title "Speed Report $tag" --notes $notes --latest
+          gh release create $tag dist\SpeedReport.exe dist\SpeedReport.exe.sha256 certs\AkakusSpeedReport.cer certs\Trust-Akakus-Publisher.ps1 --repo ${{ github.repository }} --title "Speed Report $tag" --notes $notes --latest
           # keep the 5 newest releases
           $old = gh release list --repo ${{ github.repository }} --limit 50 --json tagName -q '.[].tagName' | Select-Object -Skip 5
           foreach ($t in $old) { gh release delete $t --yes --cleanup-tag --repo ${{ github.repository }} }
