@@ -1,0 +1,98 @@
+name: build-exe
+
+# CI/CD for the portable Windows app:
+#   * every day (03:17 UTC) it checks whether the (private) source repo has new commits and, if so, builds and publishes
+#   * "Run workflow" (manual) always builds;  pushing a tag v* builds too
+# The source repo is private and is read through a read-only deploy key (secret SOURCE_DEPLOY_KEY); only the
+# compiled SpeedReport.exe is published, as a public GitHub Release.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: write
+
+env:
+  SOURCE_REPO: abdalraof-albarbar/weekly-internet-test-report
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.src.outputs.sha }}
+      build: ${{ steps.src.outputs.build }}
+    steps:
+      - name: Find the newest source commit and decide whether to build
+        id: src
+        env:
+          KEY: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/src_key && chmod 600 ~/.ssh/src_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          sha=$(GIT_SSH_COMMAND="ssh -i ~/.ssh/src_key -o IdentitiesOnly=yes" git ls-remote "git@github.com:${SOURCE_REPO}.git" HEAD | cut -f1)
+          [ -n "$sha" ] || { echo "could not read the source repo"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          build=true
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            last=$(gh release view --repo "${{ github.repository }}" --json body -q .body 2>/dev/null | grep -o 'source: [0-9a-f]\{40\}' | head -1 | cut -d' ' -f2 || true)
+            [ "$last" = "$sha" ] && build=false
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "source $sha, build=$build"
+
+  build:
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the private source (read-only deploy key)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPO }}
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          ref: ${{ needs.check.outputs.sha }}
+          path: app
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Build SpeedReport.exe
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Self-test the exe (app starts, OCR engine loads)
+        shell: pwsh
+        run: |
+          $out = Join-Path $PWD 'selftest.txt'
+          $p = Start-Process -FilePath dist\SpeedReport.exe -ArgumentList '--selftest', $out -PassThru -Wait
+          if (Test-Path $out) { Get-Content $out }
+          if ($p.ExitCode -ne 0) { throw "self-test failed (exit $($p.ExitCode))" }
+
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash dist\SpeedReport.exe -Algorithm SHA256).Hash.ToLower()
+          "$h  SpeedReport.exe" | Out-File -Encoding ascii dist\SpeedReport.exe.sha256
+          Get-Content dist\SpeedReport.exe.sha256
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $sha = '${{ needs.check.outputs.sha }}'
+          $tag = "v$(Get-Date -Format 'yyyy.MM.dd')-$($sha.Substring(0,7))"
+          $notes = "Portable Windows app (no installer): download SpeedReport.exe, double-click, it opens in your browser.`n`nsource: $sha"
+          gh release delete $tag --yes --cleanup-tag --repo ${{ github.repository }} 2>$null
+          gh release create $tag dist\SpeedReport.exe dist\SpeedReport.exe.sha256 --repo ${{ github.repository }} --title "Speed Report $tag" --notes $notes --latest
+          # keep the 5 newest releases
+          $old = gh release list --repo ${{ github.repository }} --limit 50 --json tagName -q '.[].tagName' | Select-Object -Skip 5
+          foreach ($t in $old) { gh release delete $t --yes --cleanup-tag --repo ${{ github.repository }} }

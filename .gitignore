@@ -1,0 +1,9 @@
+app/
+dist/
+build/
+*.spec
+__pycache__/
+config.public.json
+app.ico
+selftest.txt
+SpeedReport-data/
