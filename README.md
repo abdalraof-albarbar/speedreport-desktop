@@ -2,7 +2,7 @@
 
 Weekly Internet Test · Communications Department · Akakus Oil Operations, El Sharara Field.
 
-**Download:** [SpeedReport.exe](../../releases/latest/download/SpeedReport.exe) (latest release). No installer and no account needed.
+**Download:** [SpeedReport.exe](https://github.com/abdalraof-albarbar/speedreport-desktop/releases/latest/download/SpeedReport.exe) (latest release). No installer and no account needed.
 
 1. Download `SpeedReport.exe` anywhere (Desktop, a USB stick, ...).
 2. Double-click it. Windows may show "Windows protected your PC" because the file is not code-signed: choose **More info → Run anyway**.
